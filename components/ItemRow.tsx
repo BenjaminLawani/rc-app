@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { EntryRow, ItemRow as ItemModel } from "@/lib/types";
+import { soldOf } from "@/lib/local/queries";
 import { cn } from "@/lib/cn";
 
 function parseNum(s: string): number | null {
@@ -44,7 +45,12 @@ export function ItemRow({ item, entry, onCommitOpening, onCommitClosing, readOnl
   const openVal = parseNum(openStr);
   const closeVal = parseNum(closeStr);
   const effectiveOpen = openVal ?? entry.opening;
-  const sold = closeVal == null ? null : effectiveOpen - closeVal;
+  const sold = soldOf({
+    opening: effectiveOpen,
+    closing: closeVal,
+    received: entry.received ?? 0,
+    transferred: entry.transferred ?? 0,
+  });
 
   const commitOpening = () => {
     const n = Math.max(0, parseNum(openStr) ?? 0);

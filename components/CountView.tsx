@@ -10,19 +10,36 @@ import {
   startOrGetSession,
   setEntryOpening,
   setEntryClosing,
+  setEntryReceived,
+  setEntryTransferred,
+  setSessionFinance,
   setSessionStatus,
+  soldOf,
   todayISO,
   formatSessionLabel,
 } from "@/lib/local/queries";
-import type { EntryRow } from "@/lib/types";
+import { formatNaira } from "@/lib/money";
+import type { EntryRow, SessionRow } from "@/lib/types";
 import { SearchBar } from "@/components/SearchBar";
 import { CategorySection } from "@/components/CategorySection";
+import { MovementsPanel } from "@/components/MovementsPanel";
+import { CashUpPanel } from "@/components/CashUpPanel";
+import { cn } from "@/lib/cn";
 import { IconSync } from "@/components/icons";
+
+type Tab = "stock" | "movements" | "cashup";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "stock", label: "Stock" },
+  { id: "movements", label: "Movements" },
+  { id: "cashup", label: "Cash up" },
+];
 
 export function CountView({ date }: { date: string }) {
   const { user } = useAuth();
   const { syncNow } = useSync();
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("stock");
   const isToday = date === todayISO();
 
   const categories = useLiveQuery(() => getDB().categories.orderBy("sortOrder").toArray(), []);
@@ -55,12 +72,32 @@ export function CountView({ date }: { date: string }) {
     if (readOnly) return;
     setEntryClosing(id, v, user).then(syncNow);
   };
+  const commitReceived = (id: string, v: number) => {
+    if (readOnly) return;
+    setEntryReceived(id, v, user).then(syncNow);
+  };
+  const commitTransferred = (id: string, v: number) => {
+    if (readOnly) return;
+    setEntryTransferred(id, v, user).then(syncNow);
+  };
+  const commitFinance = (
+    patch: Partial<Pick<SessionRow, "cashCounted" | "posTotal" | "expenses" | "expensesNote">>,
+  ) => {
+    if (readOnly) return;
+    setSessionFinance(date, patch, user).then(syncNow);
+  };
 
   const entryByItem = useMemo(() => {
     const m = new Map<string, EntryRow>();
     for (const e of entries ?? []) m.set(e.itemId, e);
     return m;
   }, [entries]);
+
+  const priceByItem = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of items ?? []) m.set(i.id, i.price ?? 0);
+    return m;
+  }, [items]);
 
   const groups = useMemo(() => {
     if (!categories || !items) return [];
@@ -78,10 +115,11 @@ export function CountView({ date }: { date: string }) {
 
   const totalItems = (items ?? []).filter((i) => i.active && !i.deletedAt).length;
   const counted = (entries ?? []).filter((e) => e.closing != null).length;
-  const totalSold = (entries ?? []).reduce(
-    (s, e) => (e.closing != null ? s + (e.opening - e.closing) : s),
-    0,
-  );
+  const totalSold = (entries ?? []).reduce((s, e) => s + (soldOf(e) ?? 0), 0);
+  const expected = (entries ?? []).reduce((s, e) => {
+    const sold = soldOf(e);
+    return sold == null ? s : s + sold * (priceByItem.get(e.itemId) ?? 0);
+  }, 0);
   const pct = totalItems ? Math.round((counted / totalItems) * 100) : 0;
 
   const loading =
@@ -100,6 +138,8 @@ export function CountView({ date }: { date: string }) {
     );
   }
 
+  const showSearch = tab === "stock" || tab === "movements";
+
   return (
     <div className="mx-auto max-w-2xl">
       {!isToday && (
@@ -112,7 +152,7 @@ export function CountView({ date }: { date: string }) {
       )}
 
       <div className="px-4 pb-3 pt-2">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold tracking-tight">
               {isToday ? "Today's count" : formatSessionLabel(date)}
@@ -121,9 +161,19 @@ export function CountView({ date }: { date: string }) {
               {isToday ? formatSessionLabel(date) : session?.status === "closed" ? "Closed" : "Open"}
             </p>
           </div>
-          <div className="text-right">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-subtle">Sold</div>
-            <div className="text-xl font-semibold tabular-nums">{totalSold}</div>
+          <div className="flex items-start gap-5">
+            <div className="text-right">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-subtle">Sold</div>
+              <div className="text-xl font-semibold tabular-nums">{totalSold}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-subtle">
+                Expected
+              </div>
+              <div className="text-xl font-semibold tabular-nums text-accent">
+                {formatNaira(expected)}
+              </div>
+            </div>
           </div>
         </div>
         <div className="mt-3">
@@ -148,14 +198,37 @@ export function CountView({ date }: { date: string }) {
             </button>
           </div>
         )}
+
+        {/* Stock / Movements / Cash up switcher */}
+        <div className="mt-3 flex rounded-xl bg-surface-2 p-1 text-sm">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex-1 rounded-lg py-1.5 font-medium transition",
+                tab === t.id ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <SearchBar value={search} onChange={setSearch} />
+      {showSearch && <SearchBar value={search} onChange={setSearch} />}
 
       {loading ? (
         <div className="grid place-items-center py-20">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-accent" />
         </div>
+      ) : tab === "cashup" ? (
+        <CashUpPanel
+          expected={expected}
+          session={session ?? null}
+          onCommit={commitFinance}
+          readOnly={readOnly}
+        />
       ) : totalItems === 0 ? (
         <div className="px-6 py-20 text-center">
           <p className="text-sm text-muted">No items loaded yet.</p>
@@ -171,6 +244,13 @@ export function CountView({ date }: { date: string }) {
         <div className="px-6 py-20 text-center text-sm text-muted">
           No items match &ldquo;{search}&rdquo;.
         </div>
+      ) : tab === "movements" ? (
+        <MovementsPanel
+          groups={groups}
+          onCommitReceived={commitReceived}
+          onCommitTransferred={commitTransferred}
+          readOnly={readOnly}
+        />
       ) : (
         <div>
           {groups.map((g) => (

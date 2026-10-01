@@ -18,9 +18,13 @@ export function formatSessionLabel(dateISO: string): string {
   });
 }
 
-export function soldOf(e: Pick<EntryRow, "opening" | "closing">): number | null {
+/** Quantity sold, accounting for stock that moved during the day:
+ *  sold = opening + received − transferred − closing. Null until closing is set. */
+export function soldOf(
+  e: Pick<EntryRow, "opening" | "closing" | "received" | "transferred">,
+): number | null {
   if (e.closing == null) return null;
-  return e.opening - e.closing;
+  return e.opening + (e.received ?? 0) - (e.transferred ?? 0) - e.closing;
 }
 
 function entryId(sessionId: string, itemId: string) {
@@ -54,6 +58,10 @@ export async function startOrGetSession(dateISO: string, user: AuthUser | null):
     createdBy: user?.id ?? null,
     createdAt: now,
     closedAt: null,
+    cashCounted: null,
+    posTotal: null,
+    expenses: null,
+    expensesNote: null,
     updatedAt: now,
     serverRev: 0,
     deletedAt: null,
@@ -64,6 +72,8 @@ export async function startOrGetSession(dateISO: string, user: AuthUser | null):
     itemId: it.id,
     opening: priorClosing.has(it.id) ? (priorClosing.get(it.id) as number) : it.defaultOpening,
     closing: null,
+    received: 0,
+    transferred: 0,
     updatedBy: user?.id ?? null,
     updatedAt: now,
     serverRev: 0,
@@ -84,7 +94,7 @@ export async function startOrGetSession(dateISO: string, user: AuthUser | null):
 // re-read the latest row and never clobber each other's field.
 async function patchEntry(
   id: string,
-  patch: Partial<Pick<EntryRow, "opening" | "closing">>,
+  patch: Partial<Pick<EntryRow, "opening" | "closing" | "received" | "transferred">>,
   user: AuthUser | null,
 ) {
   const db = getDB();
@@ -104,6 +114,14 @@ export function setEntryClosing(id: string, closing: number | null, user: AuthUs
 
 export function setEntryOpening(id: string, opening: number, user: AuthUser | null) {
   return patchEntry(id, { opening }, user);
+}
+
+export function setEntryReceived(id: string, received: number, user: AuthUser | null) {
+  return patchEntry(id, { received }, user);
+}
+
+export function setEntryTransferred(id: string, transferred: number, user: AuthUser | null) {
+  return patchEntry(id, { transferred }, user);
 }
 
 export async function clearClosing(sessionId: string, user: AuthUser | null) {
@@ -132,6 +150,8 @@ export async function resetToDefaults(sessionId: string, user: AuthUser | null) 
     ...e,
     opening: defaults.get(e.itemId) ?? 0,
     closing: null,
+    received: 0,
+    transferred: 0,
     updatedBy: user?.id ?? e.updatedBy,
     updatedAt: now,
   }));
@@ -143,7 +163,12 @@ export async function resetToDefaults(sessionId: string, user: AuthUser | null) 
 }
 
 // ── Catalog management (admin) ──────────────────────────────────────
-export async function createItem(input: { name: string; categoryId: string; defaultOpening: number }) {
+export async function createItem(input: {
+  name: string;
+  categoryId: string;
+  defaultOpening: number;
+  price?: number;
+}) {
   const db = getDB();
   const now = Date.now();
   const id = `itm-${crypto.randomUUID().slice(0, 8)}`;
@@ -155,6 +180,7 @@ export async function createItem(input: { name: string; categoryId: string; defa
     categoryId: input.categoryId,
     sortOrder,
     defaultOpening: input.defaultOpening,
+    price: Math.max(0, input.price ?? 0),
     active: true,
     updatedAt: now,
     serverRev: 0,
@@ -169,7 +195,7 @@ export async function createItem(input: { name: string; categoryId: string; defa
 
 export async function updateItem(
   id: string,
-  patch: Partial<Pick<ItemRow, "name" | "categoryId" | "defaultOpening" | "active" | "sortOrder">>,
+  patch: Partial<Pick<ItemRow, "name" | "categoryId" | "defaultOpening" | "price" | "active" | "sortOrder">>,
 ) {
   const db = getDB();
   const now = Date.now();
@@ -232,6 +258,28 @@ export async function setSessionStatus(sessionId: string, status: "open" | "clos
     updatedAt: now,
   };
   await db.transaction("rw", db.sessions, db.outbox, async () => {
+    await db.sessions.put(next);
+    await db.outbox.add({ entity: "session", entityId: sessionId, queuedAt: now });
+  });
+}
+
+/** Record the day's cash-up (cash, POS, expenses) on the session row. */
+export async function setSessionFinance(
+  sessionId: string,
+  patch: Partial<Pick<SessionRow, "cashCounted" | "posTotal" | "expenses" | "expensesNote">>,
+  user: AuthUser | null,
+) {
+  const db = getDB();
+  const now = Date.now();
+  await db.transaction("rw", db.sessions, db.outbox, async () => {
+    const cur = await db.sessions.get(sessionId);
+    if (!cur) return;
+    const next: SessionRow = {
+      ...cur,
+      ...patch,
+      createdBy: cur.createdBy ?? user?.id ?? null,
+      updatedAt: now,
+    };
     await db.sessions.put(next);
     await db.outbox.add({ entity: "session", entityId: sessionId, queuedAt: now });
   });

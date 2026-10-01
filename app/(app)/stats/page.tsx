@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { getDB } from "@/lib/local/db";
-import { todayISO, formatSessionLabel } from "@/lib/local/queries";
+import { todayISO, formatSessionLabel, soldOf } from "@/lib/local/queries";
 import { StatCard } from "@/components/StatCard";
 
 export default function StatsPage() {
@@ -23,7 +23,7 @@ export default function StatsPage() {
     totalOpening += e.opening;
     if (e.closing != null) {
       totalClosing += e.closing;
-      totalSold += e.opening - e.closing;
+      totalSold += soldOf(e) ?? 0;
       counted += 1;
     }
   }
@@ -34,7 +34,7 @@ export default function StatsPage() {
       const total = activeItems.filter((i) => i.categoryId === cat.id).length;
       const es = (entries ?? []).filter((e) => itemById.get(e.itemId)?.categoryId === cat.id);
       const c = es.filter((e) => e.closing != null).length;
-      const sold = es.reduce((s, e) => (e.closing != null ? s + (e.opening - e.closing) : s), 0);
+      const sold = es.reduce((s, e) => s + (soldOf(e) ?? 0), 0);
       return { cat, total, counted: c, sold };
     })
     .filter((x) => x.total > 0);

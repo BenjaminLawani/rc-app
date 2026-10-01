@@ -1,20 +1,29 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getDB } from "@/lib/local/db";
+import { useAuth } from "@/lib/client/auth";
 import { useSync } from "@/lib/client/sync";
-import { setSessionStatus, todayISO } from "@/lib/local/queries";
+import { setSessionStatus, soldOf, todayISO } from "@/lib/local/queries";
 import { exportSessionCsv } from "@/lib/local/export";
 import { IconDownload, IconLock, IconReset } from "@/components/icons";
 import { cn } from "@/lib/cn";
 
 export default function SessionsPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const { syncNow } = useSync();
   const sessions = useLiveQuery(() => getDB().sessions.orderBy("date").reverse().toArray(), []);
   const entries = useLiveQuery(() => getDB().entries.toArray(), []);
   const today = todayISO();
+
+  // Sessions management is admin-only; send staff back to the count screen.
+  useEffect(() => {
+    if (!loading && user && user.role !== "admin") router.replace("/");
+  }, [loading, user, router]);
 
   const statsBySession = useMemo(() => {
     const map = new Map<string, { counted: number; total: number; sold: number }>();
@@ -23,12 +32,14 @@ export default function SessionsPage() {
       s.total += 1;
       if (e.closing != null) {
         s.counted += 1;
-        s.sold += e.opening - e.closing;
+        s.sold += soldOf(e) ?? 0;
       }
       map.set(e.sessionId, s);
     }
     return map;
   }, [entries]);
+
+  if (user && user.role !== "admin") return null;
 
   const visible = (sessions ?? []).filter((s) => !s.deletedAt);
 

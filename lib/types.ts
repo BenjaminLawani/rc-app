@@ -19,6 +19,7 @@ export type ItemRow = {
   categoryId: string;
   sortOrder: number;
   defaultOpening: number;
+  price: number;
   active: boolean;
   updatedAt: number;
   serverRev: number;
@@ -35,6 +36,11 @@ export type SessionRow = {
   createdBy: string | null;
   createdAt: number;
   closedAt: number | null;
+  // Daily cash-up — null until recorded.
+  cashCounted: number | null;
+  posTotal: number | null;
+  expenses: number | null;
+  expensesNote: string | null;
   updatedAt: number;
   serverRev: number;
   deletedAt: number | null;
@@ -46,6 +52,8 @@ export type EntryRow = {
   itemId: string;
   opening: number;
   closing: number | null;
+  received: number;
+  transferred: number;
   updatedBy: string | null;
   updatedAt: number;
   serverRev: number;

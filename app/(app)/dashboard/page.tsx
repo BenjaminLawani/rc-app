@@ -3,7 +3,8 @@
 import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getDB } from "@/lib/local/db";
-import { todayISO, formatSessionLabel } from "@/lib/local/queries";
+import { todayISO, formatSessionLabel, soldOf } from "@/lib/local/queries";
+import { formatNaira } from "@/lib/money";
 import type { EntryRow } from "@/lib/types";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { CategoryBarChart, type CatDatum } from "@/components/dashboard/CategoryBarChart";
@@ -42,14 +43,17 @@ export default function DashboardPage() {
     const colorOf = (catId: string) => CAT_COLORS[(catIndex.get(catId) ?? 0) % CAT_COLORS.length];
 
     // Per-session aggregates.
-    type Agg = { opening: number; closing: number; sold: number; counted: number };
+    type Agg = { opening: number; closing: number; sold: number; counted: number; revenue: number };
+    const emptyAgg = (): Agg => ({ opening: 0, closing: 0, sold: 0, counted: 0, revenue: 0 });
     const bySession = new Map<string, Agg>();
     for (const e of entries) {
-      const a = bySession.get(e.sessionId) ?? { opening: 0, closing: 0, sold: 0, counted: 0 };
+      const a = bySession.get(e.sessionId) ?? emptyAgg();
       a.opening += e.opening;
-      if (e.closing != null) {
-        a.closing += e.closing;
-        a.sold += e.opening - e.closing;
+      const sold = soldOf(e);
+      if (sold != null) {
+        a.closing += e.closing ?? 0;
+        a.sold += sold;
+        a.revenue += sold * (itemById.get(e.itemId)?.price ?? 0);
         a.counted += 1;
       }
       bySession.set(e.sessionId, a);
@@ -59,11 +63,11 @@ export default function DashboardPage() {
     const today = todayISO();
     const latest =
       liveSessions.find((s) => s.id === today) ?? liveSessions[liveSessions.length - 1] ?? null;
-    const latestAgg = latest ? bySession.get(latest.id) ?? { opening: 0, closing: 0, sold: 0, counted: 0 } : null;
+    const latestAgg = latest ? bySession.get(latest.id) ?? emptyAgg() : null;
 
     const recentAsc = liveSessions.slice(-7);
     const spark = (pick: (a: Agg) => number) =>
-      recentAsc.map((s) => pick(bySession.get(s.id) ?? { opening: 0, closing: 0, sold: 0, counted: 0 }));
+      recentAsc.map((s) => pick(bySession.get(s.id) ?? emptyAgg()));
 
     // Category chart for the latest session.
     const chart: CatDatum[] = categories.map((c) => ({ category: c.name, open: 0, sold: 0, close: 0 }));
@@ -76,9 +80,10 @@ export default function DashboardPage() {
         const idx = chartIndex.get(it.categoryId);
         if (idx == null) continue;
         chart[idx].open += e.opening;
-        if (e.closing != null) {
-          chart[idx].close += e.closing;
-          chart[idx].sold += e.opening - e.closing;
+        const sold = soldOf(e);
+        if (sold != null) {
+          chart[idx].close += e.closing ?? 0;
+          chart[idx].sold += sold;
         }
       }
     }
@@ -88,7 +93,7 @@ export default function DashboardPage() {
       .slice(-5)
       .reverse()
       .map((s) => {
-        const a = bySession.get(s.id) ?? { opening: 0, closing: 0, sold: 0, counted: 0 };
+        const a = bySession.get(s.id) ?? emptyAgg();
         return { id: s.id, label: s.label, counted: a.counted, total: totalItems, sold: a.sold };
       });
 
@@ -108,7 +113,7 @@ export default function DashboardPage() {
         item: it?.name ?? e.itemId,
         opening: e.opening,
         closing: e.closing,
-        sold: e.closing == null ? null : e.opening - e.closing,
+        sold: soldOf(e),
       };
     });
 
@@ -124,16 +129,24 @@ export default function DashboardPage() {
   }
 
   const { totalItems, latest, latestAgg, spark, chart, recentSessions, rows, colorOf } = model;
-  const agg = latestAgg ?? { opening: 0, closing: 0, sold: 0, counted: 0 };
+  const agg = latestAgg ?? { opening: 0, closing: 0, sold: 0, counted: 0, revenue: 0 };
   const pct = totalItems ? Math.round((agg.counted / totalItems) * 100) : 0;
   const periodLabel = latest ? formatSessionLabel(latest.id) : "No session yet";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-4 lg:px-8 lg:py-6">
-      <div className="mb-4 flex items-end justify-between">
+      <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted">{periodLabel}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-subtle">
+            Expected sales
+          </div>
+          <div className="text-xl font-semibold tabular-nums text-accent">
+            {formatNaira(agg.revenue)}
+          </div>
         </div>
       </div>
 

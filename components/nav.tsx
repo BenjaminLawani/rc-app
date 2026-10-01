@@ -14,11 +14,11 @@ export type NavItem = {
   adminOnly?: boolean;
 };
 
-// Bottom nav (mobile) — keep to four primary destinations.
+// Bottom nav (mobile) — primary destinations. Sessions is admin-only.
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: IconDashboard },
   { href: "/", label: "Count", Icon: IconCount },
-  { href: "/sessions", label: "Sessions", Icon: IconSessions },
+  { href: "/sessions", label: "Sessions", Icon: IconSessions, adminOnly: true },
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];
 
@@ -26,7 +26,7 @@ export const PRIMARY_NAV: NavItem[] = [
 export const SIDEBAR_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: IconDashboard },
   { href: "/", label: "Count", Icon: IconCount },
-  { href: "/sessions", label: "Sessions", Icon: IconSessions },
+  { href: "/sessions", label: "Sessions", Icon: IconSessions, adminOnly: true },
   { href: "/items", label: "Inventory", Icon: IconInventory, adminOnly: true },
   { href: "/settings", label: "Settings", Icon: IconSettings },
 ];

@@ -34,7 +34,7 @@ export default function ItemsPage() {
 
   const [showArchived, setShowArchived] = useState(false);
   const [newCat, setNewCat] = useState("");
-  const [form, setForm] = useState({ name: "", categoryId: "", defaultOpening: "0" });
+  const [form, setForm] = useState({ name: "", categoryId: "", defaultOpening: "0", price: "0" });
   const [error, setError] = useState<string | null>(null);
 
   const addCategory = async (e: React.FormEvent) => {
@@ -57,8 +57,9 @@ export default function ItemsPage() {
       name: form.name,
       categoryId: catId,
       defaultOpening: Math.max(0, Number(form.defaultOpening) || 0),
+      price: Math.max(0, Number(form.price) || 0),
     });
-    setForm({ name: "", categoryId: catId, defaultOpening: "0" });
+    setForm({ name: "", categoryId: catId, defaultOpening: "0", price: "0" });
     syncNow();
   };
 
@@ -98,26 +99,40 @@ export default function ItemsPage() {
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
         />
+        <select
+          className={inputCls}
+          value={form.categoryId || categories?.[0]?.id || ""}
+          onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+        >
+          {(categories ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         <div className="flex gap-2">
-          <select
-            className={inputCls}
-            value={form.categoryId || categories?.[0]?.id || ""}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-          >
-            {(categories ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <input
-            className={`${inputCls} w-28`}
-            type="number"
-            min={0}
-            placeholder="Opening"
-            value={form.defaultOpening}
-            onChange={(e) => setForm({ ...form, defaultOpening: e.target.value })}
-          />
+          <label className="flex-1 text-xs text-muted">
+            Opening qty
+            <input
+              className={`${inputCls} mt-1`}
+              type="number"
+              min={0}
+              placeholder="0"
+              value={form.defaultOpening}
+              onChange={(e) => setForm({ ...form, defaultOpening: e.target.value })}
+            />
+          </label>
+          <label className="flex-1 text-xs text-muted">
+            Price (₦)
+            <input
+              className={`${inputCls} mt-1`}
+              type="number"
+              min={0}
+              placeholder="0"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+            />
+          </label>
         </div>
         {error && <p className="text-xs text-danger">{error}</p>}
         <button
@@ -170,9 +185,11 @@ function ItemAdminRow({
 }) {
   const [name, setName] = useState(item.name);
   const [open, setOpen] = useState(String(item.defaultOpening));
+  const [price, setPrice] = useState(String(item.price ?? 0));
 
   useEffect(() => setName(item.name), [item.name]);
   useEffect(() => setOpen(String(item.defaultOpening)), [item.defaultOpening]);
+  useEffect(() => setPrice(String(item.price ?? 0)), [item.price]);
 
   const commitName = async () => {
     const n = name.trim();
@@ -188,6 +205,16 @@ function ItemAdminRow({
       onChanged();
     }
   };
+  const commitPrice = async () => {
+    const v = Math.max(0, Number(price) || 0);
+    if (v !== (item.price ?? 0)) {
+      await updateItem(item.id, { price: v });
+      onChanged();
+    }
+  };
+
+  const numCls =
+    "w-full rounded-lg border border-border px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-accent";
 
   return (
     <div className={`px-3 py-2.5 ${item.active ? "" : "opacity-50"}`}>
@@ -197,15 +224,6 @@ function ItemAdminRow({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={commitName}
-        />
-        <input
-          className="w-16 rounded-lg border border-border px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-accent"
-          type="number"
-          min={0}
-          aria-label={`${item.name} default opening`}
-          value={open}
-          onChange={(e) => setOpen(e.target.value)}
-          onBlur={commitOpen}
         />
         <select
           className="max-w-[7rem] rounded-lg border border-border px-1.5 py-1.5 text-xs outline-none"
@@ -244,6 +262,32 @@ function ItemAdminRow({
             <IconReset width={16} height={16} />
           </button>
         )}
+      </div>
+      <div className="mt-2 flex items-center gap-2 pl-2">
+        <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
+          Opening
+          <input
+            className={`${numCls} w-16`}
+            type="number"
+            min={0}
+            aria-label={`${item.name} default opening`}
+            value={open}
+            onChange={(e) => setOpen(e.target.value)}
+            onBlur={commitOpen}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
+          Price ₦
+          <input
+            className={`${numCls} w-24`}
+            type="number"
+            min={0}
+            aria-label={`${item.name} price`}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            onBlur={commitPrice}
+          />
+        </label>
       </div>
     </div>
   );
