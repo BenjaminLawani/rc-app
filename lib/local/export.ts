@@ -12,44 +12,69 @@ export async function exportSessionCsv(sessionId: string) {
   ]);
   if (!session) return;
 
-  const catById = new Map(categories.map((c) => [c.id, c]));
   const entryByItem = new Map(entries.map((e) => [e.itemId, e]));
 
-  const activeItems = items
-    .filter((i) => i.active && !i.deletedAt)
-    .sort((a, b) => {
-      const ca = catById.get(a.categoryId)?.sortOrder ?? 0;
-      const cb = catById.get(b.categoryId)?.sortOrder ?? 0;
-      return ca !== cb ? ca - cb : a.sortOrder - b.sortOrder;
-    });
-
-  const rows: (string | number | null)[][] = [
-    ["Category", "Item", "Opening", "Received", "Transferred", "Closing", "Sold", "Price", "Value"],
-  ];
-  let expected = 0;
+  const activeItems = items.filter((i) => i.active && !i.deletedAt);
+  const itemsByCat = new Map<string, typeof activeItems>();
   for (const it of activeItems) {
-    const e = entryByItem.get(it.id);
-    const opening = e?.opening ?? it.defaultOpening;
-    const received = e?.received ?? 0;
-    const transferred = e?.transferred ?? 0;
-    const closing = e?.closing ?? null;
-    const sold = e
-      ? soldOf(e)
-      : soldOf({ opening, closing, received, transferred });
-    const value = sold == null ? null : sold * (it.price ?? 0);
-    if (value != null) expected += value;
-    rows.push([
-      catById.get(it.categoryId)?.name ?? "",
-      it.name,
-      opening,
-      received,
-      transferred,
-      closing,
-      sold,
-      it.price ?? 0,
-      value,
-    ]);
+    const list = itemsByCat.get(it.categoryId) ?? [];
+    list.push(it);
+    itemsByCat.set(it.categoryId, list);
   }
+
+  const sortedCats = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const header = [
+    "Item",
+    "Opening",
+    "Received",
+    "Total",
+    "Closing",
+    "Transferred/Sold",
+    "Price",
+    "Value",
+  ];
+
+  const rows: (string | number | null)[][] = [];
+  let grandValue = 0;
+
+  // One block per category, each with its own column header and value subtotal.
+  for (const cat of sortedCats) {
+    const catItems = (itemsByCat.get(cat.id) ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
+    if (catItems.length === 0) continue;
+
+    rows.push([cat.name]);
+    rows.push(header);
+
+    let catValue = 0;
+    for (const it of catItems) {
+      const e = entryByItem.get(it.id);
+      const opening = e?.opening ?? it.defaultOpening;
+      const received = e?.received ?? 0;
+      const closing = e?.closing ?? null;
+      const total = opening + received;
+      const sold = soldOf({ opening, received, closing });
+      const value = sold == null ? null : sold * (it.price ?? 0);
+      if (value != null) catValue += value;
+      rows.push([
+        it.name,
+        opening,
+        received,
+        total,
+        closing,
+        sold,
+        it.price ?? 0,
+        value,
+      ]);
+    }
+
+    grandValue += catValue;
+    rows.push(["", "", "", "", "", "", `${cat.name} total`, catValue]);
+    rows.push([]);
+  }
+
+  // Grand total value across every good.
+  rows.push(["", "", "", "", "", "", "Total value", grandValue]);
 
   // Daily cash-up summary.
   const cash = session.cashCounted ?? 0;
@@ -58,13 +83,13 @@ export async function exportSessionCsv(sessionId: string) {
   const accounted = cash + pos + expenses;
   rows.push([]);
   rows.push(["Cash-up"]);
-  rows.push(["Expected sales", expected]);
+  rows.push(["Expected sales", grandValue]);
   rows.push(["Cash counted", session.cashCounted ?? ""]);
   rows.push(["POS / card", session.posTotal ?? ""]);
   rows.push(["Expenses", session.expenses ?? ""]);
   if (session.expensesNote) rows.push(["Expenses note", session.expensesNote]);
   rows.push(["Accounted for (Cash + POS + Expenses)", accounted]);
-  rows.push(["Over / Short (Accounted − Expected)", accounted - expected]);
+  rows.push(["Over / Short (Accounted − Expected)", accounted - grandValue]);
 
   downloadFile(`stock-${session.date}.csv`, toCsv(rows));
 }

@@ -9,11 +9,19 @@ type Props = {
   category: CategoryRow;
   rows: Row[];
   onCommitOpening: (id: string, value: number) => void;
+  onCommitReceived: (id: string, value: number) => void;
   onCommitClosing: (id: string, value: number | null) => void;
   readOnly?: boolean;
 };
 
-export function CategorySection({ category, rows, onCommitOpening, onCommitClosing, readOnly }: Props) {
+export function CategorySection({
+  category,
+  rows,
+  onCommitOpening,
+  onCommitReceived,
+  onCommitClosing,
+  readOnly,
+}: Props) {
   const counted = rows.filter((r) => r.entry?.closing != null).length;
 
   return (
@@ -27,9 +35,11 @@ export function CategorySection({ category, rows, onCommitOpening, onCommitClosi
         </span>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_3rem] gap-2 px-4 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-subtle">
+      <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_2.5rem_2.75rem_2.5rem] gap-1.5 px-4 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-subtle">
         <div />
         <div className="text-center">Open</div>
+        <div className="text-center">Recv</div>
+        <div className="text-center">Total</div>
         <div className="text-center">Close</div>
         <div className="text-right">Sold</div>
       </div>
@@ -41,6 +51,7 @@ export function CategorySection({ category, rows, onCommitOpening, onCommitClosi
             item={r.item}
             entry={r.entry}
             onCommitOpening={onCommitOpening}
+            onCommitReceived={onCommitReceived}
             onCommitClosing={onCommitClosing}
             readOnly={readOnly}
           />

@@ -77,7 +77,8 @@ export const stockEntries = sqliteTable(
     itemId: text("item_id").notNull(),
     opening: real("opening").notNull().default(0),
     closing: real("closing"),
-    // Stock that moved during the day. Sold = opening + received − transferred − closing.
+    // Received = stock collected during the day. Transferred/sold = (opening + received) − closing.
+    // `transferred` is retained for back-compat with older rows but is no longer entered separately.
     received: real("received").notNull().default(0),
     transferred: real("transferred").notNull().default(0),
     updatedBy: text("updated_by"),

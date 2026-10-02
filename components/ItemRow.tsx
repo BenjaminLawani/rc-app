@@ -17,19 +17,34 @@ function fmt(n: number | null | undefined): string {
   return String(n);
 }
 
+function fmtRecv(n: number | null | undefined): string {
+  if (n == null || n === 0) return "";
+  return String(n);
+}
+
 type Props = {
   item: ItemModel;
   entry: EntryRow | undefined;
   onCommitOpening: (id: string, value: number) => void;
+  onCommitReceived: (id: string, value: number) => void;
   onCommitClosing: (id: string, value: number | null) => void;
   readOnly?: boolean;
 };
 
-export function ItemRow({ item, entry, onCommitOpening, onCommitClosing, readOnly }: Props) {
+export function ItemRow({
+  item,
+  entry,
+  onCommitOpening,
+  onCommitReceived,
+  onCommitClosing,
+  readOnly,
+}: Props) {
   const [openStr, setOpenStr] = useState(fmt(entry?.opening));
+  const [recvStr, setRecvStr] = useState(fmtRecv(entry?.received));
   const [closeStr, setCloseStr] = useState(fmt(entry?.closing));
-  const focused = useRef<"open" | "close" | null>(null);
+  const focused = useRef<"open" | "recv" | "close" | null>(null);
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recvTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reflect remote/store changes when the field is not being edited.
@@ -37,35 +52,37 @@ export function ItemRow({ item, entry, onCommitOpening, onCommitClosing, readOnl
     if (focused.current !== "open") setOpenStr(fmt(entry?.opening));
   }, [entry?.opening]);
   useEffect(() => {
+    if (focused.current !== "recv") setRecvStr(fmtRecv(entry?.received));
+  }, [entry?.received]);
+  useEffect(() => {
     if (focused.current !== "close") setCloseStr(fmt(entry?.closing));
   }, [entry?.closing]);
 
   if (!entry) return null;
 
   const openVal = parseNum(openStr);
+  const recvVal = parseNum(recvStr);
   const closeVal = parseNum(closeStr);
   const effectiveOpen = openVal ?? entry.opening;
-  const sold = soldOf({
-    opening: effectiveOpen,
-    closing: closeVal,
-    received: entry.received ?? 0,
-    transferred: entry.transferred ?? 0,
-  });
+  const effectiveRecv = recvVal ?? entry.received ?? 0;
+  const total = effectiveOpen + effectiveRecv;
+  const sold = soldOf({ opening: effectiveOpen, received: effectiveRecv, closing: closeVal });
 
   const commitOpening = () => {
     const n = Math.max(0, parseNum(openStr) ?? 0);
     onCommitOpening(entry.id, n);
   };
+  const commitReceived = () => onCommitReceived(entry.id, Math.max(0, parseNum(recvStr) ?? 0));
   const commitClosing = () => {
     const raw = parseNum(closeStr);
     onCommitClosing(entry.id, raw == null ? null : Math.max(0, raw));
   };
 
   const inputCls =
-    "w-full rounded-lg border border-border bg-surface px-1 py-2 text-center text-[15px] tabular-nums outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted";
+    "w-full rounded-lg border border-border bg-surface px-0.5 py-2 text-center text-[15px] tabular-nums outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_3rem] items-center gap-2 px-4 py-2.5">
+    <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_2.5rem_2.75rem_2.5rem] items-center gap-1.5 px-4 py-2.5">
       <div className="min-w-0 truncate text-[15px] text-fg" title={item.name}>
         {item.name}
       </div>
@@ -91,6 +108,31 @@ export function ItemRow({ item, entry, onCommitOpening, onCommitClosing, readOnl
         }}
         className={cn(inputCls, "text-muted")}
       />
+
+      <input
+        aria-label={`${item.name} received`}
+        inputMode="decimal"
+        disabled={readOnly}
+        value={recvStr}
+        placeholder="0"
+        onFocus={(e) => {
+          focused.current = "recv";
+          e.currentTarget.select();
+        }}
+        onChange={(e) => {
+          setRecvStr(e.target.value);
+          if (recvTimer.current) clearTimeout(recvTimer.current);
+          recvTimer.current = setTimeout(commitReceived, 500);
+        }}
+        onBlur={() => {
+          focused.current = null;
+          if (recvTimer.current) clearTimeout(recvTimer.current);
+          commitReceived();
+        }}
+        className={cn(inputCls, recvVal ? "border-success/40 font-medium text-success" : "text-muted")}
+      />
+
+      <div className="text-center text-[15px] font-medium tabular-nums text-muted">{total}</div>
 
       <input
         aria-label={`${item.name} closing`}

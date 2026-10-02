@@ -18,13 +18,14 @@ export function formatSessionLabel(dateISO: string): string {
   });
 }
 
-/** Quantity sold, accounting for stock that moved during the day:
- *  sold = opening + received − transferred − closing. Null until closing is set. */
+/** Quantity that left during the day (sold or transferred out):
+ *  transferred/sold = total − closing, where total = opening + received.
+ *  Null until closing is set. */
 export function soldOf(
-  e: Pick<EntryRow, "opening" | "closing" | "received" | "transferred">,
+  e: Pick<EntryRow, "opening" | "closing" | "received">,
 ): number | null {
   if (e.closing == null) return null;
-  return e.opening + (e.received ?? 0) - (e.transferred ?? 0) - e.closing;
+  return e.opening + (e.received ?? 0) - e.closing;
 }
 
 function entryId(sessionId: string, itemId: string) {
@@ -118,10 +119,6 @@ export function setEntryOpening(id: string, opening: number, user: AuthUser | nu
 
 export function setEntryReceived(id: string, received: number, user: AuthUser | null) {
   return patchEntry(id, { received }, user);
-}
-
-export function setEntryTransferred(id: string, transferred: number, user: AuthUser | null) {
-  return patchEntry(id, { transferred }, user);
 }
 
 export async function clearClosing(sessionId: string, user: AuthUser | null) {

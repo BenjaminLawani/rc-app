@@ -11,7 +11,6 @@ import {
   setEntryOpening,
   setEntryClosing,
   setEntryReceived,
-  setEntryTransferred,
   setSessionFinance,
   setSessionStatus,
   soldOf,
@@ -22,16 +21,15 @@ import { formatNaira } from "@/lib/money";
 import type { EntryRow, SessionRow } from "@/lib/types";
 import { SearchBar } from "@/components/SearchBar";
 import { CategorySection } from "@/components/CategorySection";
-import { MovementsPanel } from "@/components/MovementsPanel";
 import { CashUpPanel } from "@/components/CashUpPanel";
+import { exportSessionCsv } from "@/lib/local/export";
 import { cn } from "@/lib/cn";
-import { IconSync } from "@/components/icons";
+import { IconSync, IconDownload } from "@/components/icons";
 
-type Tab = "stock" | "movements" | "cashup";
+type Tab = "stock" | "cashup";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "stock", label: "Stock" },
-  { id: "movements", label: "Movements" },
   { id: "cashup", label: "Cash up" },
 ];
 
@@ -75,10 +73,6 @@ export function CountView({ date }: { date: string }) {
   const commitReceived = (id: string, v: number) => {
     if (readOnly) return;
     setEntryReceived(id, v, user).then(syncNow);
-  };
-  const commitTransferred = (id: string, v: number) => {
-    if (readOnly) return;
-    setEntryTransferred(id, v, user).then(syncNow);
   };
   const commitFinance = (
     patch: Partial<Pick<SessionRow, "cashCounted" | "posTotal" | "expenses" | "expensesNote">>,
@@ -138,7 +132,7 @@ export function CountView({ date }: { date: string }) {
     );
   }
 
-  const showSearch = tab === "stock" || tab === "movements";
+  const showSearch = tab === "stock";
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -244,21 +238,23 @@ export function CountView({ date }: { date: string }) {
         <div className="px-6 py-20 text-center text-sm text-muted">
           No items match &ldquo;{search}&rdquo;.
         </div>
-      ) : tab === "movements" ? (
-        <MovementsPanel
-          groups={groups}
-          onCommitReceived={commitReceived}
-          onCommitTransferred={commitTransferred}
-          readOnly={readOnly}
-        />
       ) : (
         <div>
+          <div className="flex justify-end px-4 pt-2">
+            <button
+              onClick={() => exportSessionCsv(date)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium transition active:scale-95"
+            >
+              <IconDownload width={15} height={15} /> Export CSV
+            </button>
+          </div>
           {groups.map((g) => (
             <CategorySection
               key={g.cat.id}
               category={g.cat}
               rows={g.rows}
               onCommitOpening={commitOpening}
+              onCommitReceived={commitReceived}
               onCommitClosing={commitClosing}
               readOnly={readOnly}
             />
