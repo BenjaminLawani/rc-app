@@ -21,6 +21,13 @@ import { cn } from "@/lib/cn";
 const inputCls =
   "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/15";
 
+/** Profit margin on selling price, as a whole-number percent. 0 when there's
+ *  no selling price. Negative if cost exceeds selling (sold at a loss). */
+function marginPct(cost: number, selling: number): number | null {
+  if (!selling) return null;
+  return Math.round(((selling - cost) / selling) * 100);
+}
+
 export default function ItemsPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -38,7 +45,7 @@ export default function ItemsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [addingCat, setAddingCat] = useState(false);
   const [newCat, setNewCat] = useState("");
-  const [form, setForm] = useState({ name: "", defaultOpening: "0", price: "0" });
+  const [form, setForm] = useState({ name: "", costPrice: "0", price: "0" });
   const [error, setError] = useState<string | null>(null);
 
   const liveCats = useMemo(() => (categories ?? []).filter((c) => !c.deletedAt), [categories]);
@@ -69,12 +76,14 @@ export default function ItemsPage() {
     await createItem({
       name: form.name,
       categoryId: effectiveCat,
-      defaultOpening: Math.max(0, Number(form.defaultOpening) || 0),
+      costPrice: Math.max(0, Number(form.costPrice) || 0),
       price: Math.max(0, Number(form.price) || 0),
     });
-    setForm({ name: "", defaultOpening: "0", price: "0" });
+    setForm({ name: "", costPrice: "0", price: "0" });
     syncNow();
   };
+
+  const formMargin = marginPct(Number(form.costPrice) || 0, Number(form.price) || 0);
 
   if (user && user.role !== "admin") return null;
 
@@ -203,18 +212,18 @@ export default function ItemsPage() {
             />
             <div className="flex gap-2">
               <label className="flex-1 text-xs text-muted">
-                Opening qty
+                Cost price (₦)
                 <input
                   className={`${inputCls} mt-1`}
                   type="number"
                   min={0}
                   placeholder="0"
-                  value={form.defaultOpening}
-                  onChange={(e) => setForm({ ...form, defaultOpening: e.target.value })}
+                  value={form.costPrice}
+                  onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
                 />
               </label>
               <label className="flex-1 text-xs text-muted">
-                Price (₦)
+                Selling price (₦)
                 <input
                   className={`${inputCls} mt-1`}
                   type="number"
@@ -225,6 +234,12 @@ export default function ItemsPage() {
                 />
               </label>
             </div>
+            <p className="text-[11px] text-subtle">
+              Profit margin:{" "}
+              <span className="font-semibold tabular-nums text-fg">
+                {formMargin == null ? "—" : `${formMargin}%`}
+              </span>
+            </p>
             {error && <p className="text-xs text-danger">{error}</p>}
             <button
               type="submit"
@@ -261,11 +276,11 @@ function ItemAdminRow({
   onChanged: () => void;
 }) {
   const [name, setName] = useState(item.name);
-  const [open, setOpen] = useState(String(item.defaultOpening));
+  const [cost, setCost] = useState(String(item.costPrice ?? 0));
   const [price, setPrice] = useState(String(item.price ?? 0));
 
   useEffect(() => setName(item.name), [item.name]);
-  useEffect(() => setOpen(String(item.defaultOpening)), [item.defaultOpening]);
+  useEffect(() => setCost(String(item.costPrice ?? 0)), [item.costPrice]);
   useEffect(() => setPrice(String(item.price ?? 0)), [item.price]);
 
   const commitName = async () => {
@@ -275,10 +290,10 @@ function ItemAdminRow({
       onChanged();
     }
   };
-  const commitOpen = async () => {
-    const v = Math.max(0, Number(open) || 0);
-    if (v !== item.defaultOpening) {
-      await updateItem(item.id, { defaultOpening: v });
+  const commitCost = async () => {
+    const v = Math.max(0, Number(cost) || 0);
+    if (v !== (item.costPrice ?? 0)) {
+      await updateItem(item.id, { costPrice: v });
       onChanged();
     }
   };
@@ -289,6 +304,8 @@ function ItemAdminRow({
       onChanged();
     }
   };
+
+  const margin = marginPct(Number(cost) || 0, Number(price) || 0);
 
   const numCls =
     "w-full rounded-lg border border-border px-2 py-1.5 text-center text-sm tabular-nums outline-none focus:border-accent";
@@ -340,31 +357,46 @@ function ItemAdminRow({
           </button>
         )}
       </div>
-      <div className="mt-2 flex items-center gap-2 pl-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 pl-2">
         <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
-          Opening
-          <input
-            className={`${numCls} w-16`}
-            type="number"
-            min={0}
-            aria-label={`${item.name} default opening`}
-            value={open}
-            onChange={(e) => setOpen(e.target.value)}
-            onBlur={commitOpen}
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
-          Price ₦
+          Cost ₦
           <input
             className={`${numCls} w-24`}
             type="number"
             min={0}
-            aria-label={`${item.name} price`}
+            aria-label={`${item.name} cost price`}
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            onBlur={commitCost}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
+          Sell ₦
+          <input
+            className={`${numCls} w-24`}
+            type="number"
+            min={0}
+            aria-label={`${item.name} selling price`}
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             onBlur={commitPrice}
           />
         </label>
+        <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-subtle">
+          Margin
+          <span
+            className={cn(
+              "rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums",
+              margin == null
+                ? "bg-border text-subtle"
+                : margin < 0
+                  ? "bg-danger-soft text-danger"
+                  : "bg-accent-soft text-accent",
+            )}
+          >
+            {margin == null ? "—" : `${margin}%`}
+          </span>
+        </span>
       </div>
     </div>
   );

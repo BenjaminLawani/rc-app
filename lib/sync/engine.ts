@@ -22,23 +22,33 @@ async function setCursor(v: number) {
 async function applyPull(rows: PullRow[]) {
   if (!rows.length) return;
   const db = getDB();
-  await db.transaction("rw", db.categories, db.items, db.sessions, db.entries, async () => {
-    for (const r of rows) {
-      if (r.entity === "category") {
-        const cur = await db.categories.get(r.row.id);
-        if (!cur || r.row.updatedAt >= cur.updatedAt) await db.categories.put(r.row);
-      } else if (r.entity === "item") {
-        const cur = await db.items.get(r.row.id);
-        if (!cur || r.row.updatedAt >= cur.updatedAt) await db.items.put(r.row);
-      } else if (r.entity === "session") {
-        const cur = await db.sessions.get(r.row.id);
-        if (!cur || r.row.updatedAt >= cur.updatedAt) await db.sessions.put(r.row);
-      } else {
-        const cur = await db.entries.get(r.row.id);
-        if (!cur || r.row.updatedAt >= cur.updatedAt) await db.entries.put(r.row);
+  await db.transaction(
+    "rw",
+    [db.categories, db.items, db.sessions, db.entries, db.expenses, db.materials],
+    async () => {
+      for (const r of rows) {
+        if (r.entity === "category") {
+          const cur = await db.categories.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.categories.put(r.row);
+        } else if (r.entity === "item") {
+          const cur = await db.items.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.items.put(r.row);
+        } else if (r.entity === "session") {
+          const cur = await db.sessions.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.sessions.put(r.row);
+        } else if (r.entity === "expense") {
+          const cur = await db.expenses.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.expenses.put(r.row);
+        } else if (r.entity === "material") {
+          const cur = await db.materials.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.materials.put(r.row);
+        } else {
+          const cur = await db.entries.get(r.row.id);
+          if (!cur || r.row.updatedAt >= cur.updatedAt) await db.entries.put(r.row);
+        }
       }
-    }
-  });
+    },
+  );
 }
 
 export async function pull(): Promise<number> {
@@ -58,7 +68,7 @@ export async function push(): Promise<number> {
   if (!outbox.length) return 0;
 
   // Coalesce multiple queued edits of the same entity, sending its latest state.
-  type Entity = "session" | "entry" | "item" | "category";
+  type Entity = "session" | "entry" | "item" | "category" | "expense" | "material";
   const groups = new Map<string, { entity: Entity; entityId: string; ids: number[] }>();
   for (const o of outbox) {
     const key = `${o.entity}:${o.entityId}`;
@@ -80,6 +90,12 @@ export async function push(): Promise<number> {
     } else if (g.entity === "item") {
       const row = await db.items.get(g.entityId);
       if (row) ops.push({ entity: "item", row });
+    } else if (g.entity === "expense") {
+      const row = await db.expenses.get(g.entityId);
+      if (row) ops.push({ entity: "expense", row });
+    } else if (g.entity === "material") {
+      const row = await db.materials.get(g.entityId);
+      if (row) ops.push({ entity: "material", row });
     } else {
       const row = await db.categories.get(g.entityId);
       if (row) ops.push({ entity: "category", row });

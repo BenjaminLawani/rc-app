@@ -1,9 +1,17 @@
 import Dexie, { type Table } from "dexie";
-import type { CategoryRow, ItemRow, SessionRow, EntryRow, AuthUser } from "@/lib/types";
+import type {
+  CategoryRow,
+  ItemRow,
+  SessionRow,
+  EntryRow,
+  ExpenseRow,
+  MaterialUsageRow,
+  AuthUser,
+} from "@/lib/types";
 
 export type OutboxRow = {
   id?: number;
-  entity: "session" | "entry" | "item" | "category";
+  entity: "session" | "entry" | "item" | "category" | "expense" | "material";
   entityId: string;
   queuedAt: number;
 };
@@ -19,6 +27,8 @@ class LocalDB extends Dexie {
   items!: Table<ItemRow, string>;
   sessions!: Table<SessionRow, string>;
   entries!: Table<EntryRow, string>;
+  expenses!: Table<ExpenseRow, string>;
+  materials!: Table<MaterialUsageRow, string>;
   outbox!: Table<OutboxRow, number>;
   meta!: Table<MetaRow, string>;
 
@@ -31,6 +41,11 @@ class LocalDB extends Dexie {
       entries: "id, sessionId, itemId, serverRev, [sessionId+itemId]",
       outbox: "++id, entity, entityId, queuedAt",
       meta: "key",
+    });
+    // v2 adds the expenses ledger and raw-material usage log.
+    this.version(2).stores({
+      expenses: "id, date, serverRev",
+      materials: "id, date, serverRev",
     });
   }
 }

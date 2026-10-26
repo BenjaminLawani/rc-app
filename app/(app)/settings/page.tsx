@@ -217,35 +217,39 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
-      <Section title="Today's data">
-        <Row>
-          <button
-            onClick={() => exportSessionCsv(today)}
-            disabled={!hasSession}
-            className="inline-flex items-center gap-2 text-sm font-medium disabled:opacity-40"
-          >
-            <IconDownload width={16} height={16} /> Export CSV
-          </button>
-        </Row>
-        <Row>
-          <button
-            onClick={handleClear}
-            disabled={!hasSession}
-            className="inline-flex items-center gap-2 text-sm font-medium disabled:opacity-40"
-          >
-            <IconTrash width={16} height={16} /> Clear closing stock
-          </button>
-        </Row>
-        <Row>
-          <button
-            onClick={handleReset}
-            disabled={!hasSession}
-            className="inline-flex items-center gap-2 text-sm font-medium text-danger disabled:opacity-40"
-          >
-            <IconReset width={16} height={16} /> Reset to original values
-          </button>
-        </Row>
-      </Section>
+      {/* Admin-only: export and the destructive clear/reset actions live here so
+          staff can't wipe the day's counts by mistake. */}
+      {user?.role === "admin" && (
+        <Section title="Today's data">
+          <Row>
+            <button
+              onClick={() => exportSessionCsv(today)}
+              disabled={!hasSession}
+              className="inline-flex items-center gap-2 text-sm font-medium disabled:opacity-40"
+            >
+              <IconDownload width={16} height={16} /> Export CSV
+            </button>
+          </Row>
+          <Row>
+            <button
+              onClick={handleClear}
+              disabled={!hasSession}
+              className="inline-flex items-center gap-2 text-sm font-medium disabled:opacity-40"
+            >
+              <IconTrash width={16} height={16} /> Clear closing stock
+            </button>
+          </Row>
+          <Row>
+            <button
+              onClick={handleReset}
+              disabled={!hasSession}
+              className="inline-flex items-center gap-2 text-sm font-medium text-danger disabled:opacity-40"
+            >
+              <IconReset width={16} height={16} /> Reset to original values
+            </button>
+          </Row>
+        </Section>
+      )}
 
       {user?.role === "admin" && <UsersManager />}
 

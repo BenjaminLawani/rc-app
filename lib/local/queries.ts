@@ -1,5 +1,13 @@
 import { getDB } from "./db";
-import type { AuthUser, CategoryRow, EntryRow, ItemRow, SessionRow } from "@/lib/types";
+import type {
+  AuthUser,
+  CategoryRow,
+  EntryRow,
+  ExpenseRow,
+  ItemRow,
+  MaterialUsageRow,
+  SessionRow,
+} from "@/lib/types";
 
 export function todayISO(d = new Date()): string {
   const y = d.getFullYear();
@@ -163,8 +171,9 @@ export async function resetToDefaults(sessionId: string, user: AuthUser | null) 
 export async function createItem(input: {
   name: string;
   categoryId: string;
-  defaultOpening: number;
+  defaultOpening?: number;
   price?: number;
+  costPrice?: number;
 }) {
   const db = getDB();
   const now = Date.now();
@@ -176,8 +185,9 @@ export async function createItem(input: {
     name: input.name.trim(),
     categoryId: input.categoryId,
     sortOrder,
-    defaultOpening: input.defaultOpening,
+    defaultOpening: Math.max(0, input.defaultOpening ?? 0),
     price: Math.max(0, input.price ?? 0),
+    costPrice: Math.max(0, input.costPrice ?? 0),
     active: true,
     updatedAt: now,
     serverRev: 0,
@@ -192,7 +202,9 @@ export async function createItem(input: {
 
 export async function updateItem(
   id: string,
-  patch: Partial<Pick<ItemRow, "name" | "categoryId" | "defaultOpening" | "price" | "active" | "sortOrder">>,
+  patch: Partial<
+    Pick<ItemRow, "name" | "categoryId" | "defaultOpening" | "price" | "costPrice" | "active" | "sortOrder">
+  >,
 ) {
   const db = getDB();
   const now = Date.now();
@@ -279,5 +291,131 @@ export async function setSessionFinance(
     };
     await db.sessions.put(next);
     await db.outbox.add({ entity: "session", entityId: sessionId, queuedAt: now });
+  });
+}
+
+// ── Month helpers ───────────────────────────────────────────────────
+/** Current month as "YYYY-MM". */
+export function thisMonthISO(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** A friendly month label, e.g. "October 2026", from "YYYY-MM". */
+export function formatMonthLabel(monthISO: string): string {
+  const [y, m] = monthISO.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+// ── Business expenses (admin ledger) ────────────────────────────────
+export async function createExpense(input: {
+  date: string;
+  category: string;
+  amount: number;
+  note?: string;
+  user: AuthUser | null;
+}) {
+  const db = getDB();
+  const now = Date.now();
+  const id = `exp-${crypto.randomUUID().slice(0, 8)}`;
+  const row: ExpenseRow = {
+    id,
+    date: input.date,
+    category: input.category.trim(),
+    amount: Math.max(0, input.amount || 0),
+    note: input.note?.trim() || null,
+    createdBy: input.user?.id ?? null,
+    createdAt: now,
+    updatedAt: now,
+    serverRev: 0,
+    deletedAt: null,
+  };
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    await db.expenses.put(row);
+    await db.outbox.add({ entity: "expense", entityId: id, queuedAt: now });
+  });
+  return row;
+}
+
+export async function updateExpense(
+  id: string,
+  patch: Partial<Pick<ExpenseRow, "date" | "category" | "amount" | "note">>,
+) {
+  const db = getDB();
+  const now = Date.now();
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    const cur = await db.expenses.get(id);
+    if (!cur) return;
+    await db.expenses.put({ ...cur, ...patch, updatedAt: now });
+    await db.outbox.add({ entity: "expense", entityId: id, queuedAt: now });
+  });
+}
+
+/** Soft-delete an expense (tombstone, so the deletion syncs). */
+export async function deleteExpense(id: string) {
+  const db = getDB();
+  const now = Date.now();
+  await db.transaction("rw", db.expenses, db.outbox, async () => {
+    const cur = await db.expenses.get(id);
+    if (!cur) return;
+    await db.expenses.put({ ...cur, deletedAt: now, updatedAt: now });
+    await db.outbox.add({ entity: "expense", entityId: id, queuedAt: now });
+  });
+}
+
+// ── Raw-material usage (staff daily log) ────────────────────────────
+export async function createMaterialUsage(input: {
+  date: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  note?: string;
+  user: AuthUser | null;
+}) {
+  const db = getDB();
+  const now = Date.now();
+  const id = `mat-${crypto.randomUUID().slice(0, 8)}`;
+  const row: MaterialUsageRow = {
+    id,
+    date: input.date,
+    name: input.name.trim(),
+    quantity: Math.max(0, input.quantity || 0),
+    unit: input.unit.trim(),
+    note: input.note?.trim() || null,
+    createdBy: input.user?.id ?? null,
+    createdAt: now,
+    updatedAt: now,
+    serverRev: 0,
+    deletedAt: null,
+  };
+  await db.transaction("rw", db.materials, db.outbox, async () => {
+    await db.materials.put(row);
+    await db.outbox.add({ entity: "material", entityId: id, queuedAt: now });
+  });
+  return row;
+}
+
+export async function updateMaterialUsage(
+  id: string,
+  patch: Partial<Pick<MaterialUsageRow, "date" | "name" | "quantity" | "unit" | "note">>,
+) {
+  const db = getDB();
+  const now = Date.now();
+  await db.transaction("rw", db.materials, db.outbox, async () => {
+    const cur = await db.materials.get(id);
+    if (!cur) return;
+    await db.materials.put({ ...cur, ...patch, updatedAt: now });
+    await db.outbox.add({ entity: "material", entityId: id, queuedAt: now });
+  });
+}
+
+/** Soft-delete a material-usage row (tombstone, so the deletion syncs). */
+export async function deleteMaterialUsage(id: string) {
+  const db = getDB();
+  const now = Date.now();
+  await db.transaction("rw", db.materials, db.outbox, async () => {
+    const cur = await db.materials.get(id);
+    if (!cur) return;
+    await db.materials.put({ ...cur, deletedAt: now, updatedAt: now });
+    await db.outbox.add({ entity: "material", entityId: id, queuedAt: now });
   });
 }

@@ -165,3 +165,20 @@ export const IconCalendar = (p: IconProps) => (
     <path d="M16 2v4M8 2v4M3 10h18" />
   </Base>
 );
+
+// Money / expenses — a banknote.
+export const IconExpense = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M6 12h.01M18 12h.01" />
+  </Base>
+);
+
+// Raw materials — a sack of goods.
+export const IconMaterials = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M7 3h10l-1.5 3.5a6 6 0 0 1 3 5.2V18a3 3 0 0 1-3 3H8.5a3 3 0 0 1-3-3v-6.3a6 6 0 0 1 3-5.2L7 3z" />
+    <path d="M9 3c0 2 1.5 3.5 3 3.5S15 5 15 3" />
+  </Base>
+);

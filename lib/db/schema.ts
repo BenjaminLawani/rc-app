@@ -33,7 +33,10 @@ export const items = sqliteTable(
     categoryId: text("category_id").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     defaultOpening: real("default_opening").notNull().default(0),
+    // `price` is the selling price; `costPrice` is what the shop pays for it.
+    // Profit margin is derived (selling − cost) and never stored.
     price: real("price").notNull().default(0),
+    costPrice: real("cost_price").notNull().default(0),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     updatedAt: integer("updated_at").notNull().default(0),
     serverRev: integer("server_rev").notNull().default(0),
@@ -92,6 +95,49 @@ export const stockEntries = sqliteTable(
   ],
 );
 
+// ── Business expenses (admin ledger) ────────────────────────────────
+// A free-standing expense line so the admin can tally monthly profit/loss:
+// profit = sales − cost of goods sold − Σ expenses.
+export const expenses = sqliteTable(
+  "expenses",
+  {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    category: text("category").notNull().default(""), // e.g. Rent, Salaries, Fuel
+    amount: real("amount").notNull().default(0),
+    note: text("note"),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    serverRev: integer("server_rev").notNull().default(0),
+    deletedAt: integer("deleted_at"),
+  },
+  (t) => [index("expenses_server_rev_idx").on(t.serverRev)],
+);
+
+// ── Raw-material usage (staff daily log) ────────────────────────────
+// Free-text log of raw materials consumed, e.g. "Flour · 21 · kg".
+export const materialUsage = sqliteTable(
+  "material_usage",
+  {
+    id: text("id").primaryKey(),
+    date: text("date").notNull(), // YYYY-MM-DD
+    name: text("name").notNull(), // e.g. Flour
+    quantity: real("quantity").notNull().default(0),
+    unit: text("unit").notNull().default(""), // e.g. kg
+    note: text("note"),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    serverRev: integer("server_rev").notNull().default(0),
+    deletedAt: integer("deleted_at"),
+  },
+  (t) => [
+    index("material_usage_server_rev_idx").on(t.serverRev),
+    index("material_usage_date_idx").on(t.date),
+  ],
+);
+
 // Single-row monotonic counter used to stamp server_rev on every write.
 export const syncCounter = sqliteTable("sync_counter", {
   id: integer("id").primaryKey(),
@@ -103,3 +149,5 @@ export type Category = typeof categories.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type StockSession = typeof stockSessions.$inferSelect;
 export type StockEntry = typeof stockEntries.$inferSelect;
+export type Expense = typeof expenses.$inferSelect;
+export type MaterialUsage = typeof materialUsage.$inferSelect;

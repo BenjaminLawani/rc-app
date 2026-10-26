@@ -2,7 +2,7 @@
 // Kept free of server imports so the client bundle stays clean.
 
 export type Role = "admin" | "staff";
-export type SyncEntity = "category" | "item" | "session" | "entry";
+export type SyncEntity = "category" | "item" | "session" | "entry" | "expense" | "material";
 
 export type CategoryRow = {
   id: string;
@@ -19,7 +19,8 @@ export type ItemRow = {
   categoryId: string;
   sortOrder: number;
   defaultOpening: number;
-  price: number;
+  price: number; // selling price
+  costPrice: number; // what the shop pays for it
   active: boolean;
   updatedAt: number;
   serverRev: number;
@@ -60,6 +61,33 @@ export type EntryRow = {
   deletedAt: number | null;
 };
 
+export type ExpenseRow = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  category: string;
+  amount: number;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  serverRev: number;
+  deletedAt: number | null;
+};
+
+export type MaterialUsageRow = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  quantity: number;
+  unit: string;
+  note: string | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  serverRev: number;
+  deletedAt: number | null;
+};
+
 export type AuthUser = { id: string; email: string; name: string; role: Role };
 
 // Server -> client (pull)
@@ -67,7 +95,9 @@ export type PullRow =
   | { entity: "category"; row: CategoryRow }
   | { entity: "item"; row: ItemRow }
   | { entity: "session"; row: SessionRow }
-  | { entity: "entry"; row: EntryRow };
+  | { entity: "entry"; row: EntryRow }
+  | { entity: "expense"; row: ExpenseRow }
+  | { entity: "material"; row: MaterialUsageRow };
 
 export type PullResponse = { rows: PullRow[]; cursor: number };
 
@@ -77,7 +107,9 @@ export type PushOp =
   | { entity: "session"; row: SessionRow }
   | { entity: "entry"; row: EntryRow }
   | { entity: "item"; row: ItemRow }
-  | { entity: "category"; row: CategoryRow };
+  | { entity: "category"; row: CategoryRow }
+  | { entity: "expense"; row: ExpenseRow }
+  | { entity: "material"; row: MaterialUsageRow };
 
 export type PushRequest = { ops: PushOp[] };
 export type PushResponse = { ok: true };

@@ -16,12 +16,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Expected { ops: [...] }" }, { status: 400 });
   }
 
-  // Staff may write sessions & entries; only admins may write the catalog.
+  // Staff may write sessions, entries & raw-material usage; only admins may
+  // write the catalog (items/categories) and the expense ledger.
   const isAdmin = user.role === "admin";
   const safe = (ops as PushOp[]).filter((op) => {
     if (!op?.row?.id) return false;
-    if (op.entity === "session" || op.entity === "entry") return true;
-    if (op.entity === "item" || op.entity === "category") return isAdmin;
+    if (op.entity === "session" || op.entity === "entry" || op.entity === "material") return true;
+    if (op.entity === "item" || op.entity === "category" || op.entity === "expense") return isAdmin;
     return false;
   });
 

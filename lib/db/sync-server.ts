@@ -1,6 +1,14 @@
 import { gt, eq } from "drizzle-orm";
 import { db } from "./client";
-import { categories, items, stockSessions, stockEntries, syncCounter } from "./schema";
+import {
+  categories,
+  items,
+  stockSessions,
+  stockEntries,
+  expenses,
+  materialUsage,
+  syncCounter,
+} from "./schema";
 import type { PullResponse, PullRow, PushOp } from "@/lib/types";
 
 /**
@@ -102,6 +110,7 @@ export async function applyPush(ops: PushOp[], userId: string): Promise<void> {
           sortOrder: incoming.sortOrder,
           defaultOpening: incoming.defaultOpening,
           price: incoming.price,
+          costPrice: incoming.costPrice ?? 0,
           active: incoming.active,
           updatedAt: incoming.updatedAt,
           serverRev: rev,
@@ -109,6 +118,46 @@ export async function applyPush(ops: PushOp[], userId: string): Promise<void> {
         };
         if (existing) await tx.update(items).set(values).where(eq(items.id, incoming.id));
         else await tx.insert(items).values({ id: incoming.id, ...values });
+      } else if (op.entity === "expense") {
+        const incoming = op.row;
+        const existing = (await tx.select().from(expenses).where(eq(expenses.id, incoming.id)))[0];
+        if (existing && existing.updatedAt >= incoming.updatedAt) continue;
+        rev += 1;
+        const values = {
+          date: incoming.date,
+          category: incoming.category,
+          amount: incoming.amount,
+          note: incoming.note,
+          createdBy: incoming.createdBy ?? userId,
+          createdAt: incoming.createdAt,
+          updatedAt: incoming.updatedAt,
+          serverRev: rev,
+          deletedAt: incoming.deletedAt,
+        };
+        if (existing) await tx.update(expenses).set(values).where(eq(expenses.id, incoming.id));
+        else await tx.insert(expenses).values({ id: incoming.id, ...values });
+      } else if (op.entity === "material") {
+        const incoming = op.row;
+        const existing = (
+          await tx.select().from(materialUsage).where(eq(materialUsage.id, incoming.id))
+        )[0];
+        if (existing && existing.updatedAt >= incoming.updatedAt) continue;
+        rev += 1;
+        const values = {
+          date: incoming.date,
+          name: incoming.name,
+          quantity: incoming.quantity,
+          unit: incoming.unit,
+          note: incoming.note,
+          createdBy: incoming.createdBy ?? userId,
+          createdAt: incoming.createdAt,
+          updatedAt: incoming.updatedAt,
+          serverRev: rev,
+          deletedAt: incoming.deletedAt,
+        };
+        if (existing)
+          await tx.update(materialUsage).set(values).where(eq(materialUsage.id, incoming.id));
+        else await tx.insert(materialUsage).values({ id: incoming.id, ...values });
       } else {
         const incoming = op.row;
         const existing = (await tx.select().from(categories).where(eq(categories.id, incoming.id)))[0];
@@ -132,11 +181,13 @@ export async function applyPush(ops: PushOp[], userId: string): Promise<void> {
 
 /** Return every syncable row with server_rev greater than `since`, oldest change first. */
 export async function pullChanges(since: number): Promise<PullResponse> {
-  const [cats, its, sess, ents] = await Promise.all([
+  const [cats, its, sess, ents, exps, mats] = await Promise.all([
     db.select().from(categories).where(gt(categories.serverRev, since)),
     db.select().from(items).where(gt(items.serverRev, since)),
     db.select().from(stockSessions).where(gt(stockSessions.serverRev, since)),
     db.select().from(stockEntries).where(gt(stockEntries.serverRev, since)),
+    db.select().from(expenses).where(gt(expenses.serverRev, since)),
+    db.select().from(materialUsage).where(gt(materialUsage.serverRev, since)),
   ]);
 
   const rows: PullRow[] = [
@@ -144,6 +195,8 @@ export async function pullChanges(since: number): Promise<PullResponse> {
     ...its.map((row): PullRow => ({ entity: "item", row })),
     ...sess.map((row): PullRow => ({ entity: "session", row })),
     ...ents.map((row): PullRow => ({ entity: "entry", row })),
+    ...exps.map((row): PullRow => ({ entity: "expense", row })),
+    ...mats.map((row): PullRow => ({ entity: "material", row })),
   ];
 
   rows.sort((a, b) => a.row.serverRev - b.row.serverRev);
