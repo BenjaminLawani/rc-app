@@ -102,6 +102,140 @@ function ChangePassword() {
   );
 }
 
+function ReopenPassword() {
+  const [set, setSet] = useState<boolean | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await fetch("/api/reopen-password");
+      const data = await res.json();
+      if (res.ok) setSet(!!data.set);
+    } catch {
+      /* offline — leave status unknown */
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/reopen-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save password.");
+      setSet(true);
+      setPw("");
+      setEditing(false);
+      setMsg({ ok: true, text: "Reopen password saved." });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : "Failed." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    if (!window.confirm("Remove the reopen password? Nobody will be able to reopen a closed day until a new one is set.")) {
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/reopen-password", { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not remove password.");
+      setSet(false);
+      setMsg({ ok: true, text: "Reopen password removed." });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : "Failed." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Reopen password">
+      <Row>
+        <p className="text-xs text-muted">
+          Required to reopen a closed day for editing. Share it only with people allowed to reopen.
+        </p>
+        <div className="mt-1 text-xs font-medium">
+          Status:{" "}
+          {set === null ? (
+            <span className="text-subtle">—</span>
+          ) : set ? (
+            <span className="text-success">Set</span>
+          ) : (
+            <span className="text-danger">Not set</span>
+          )}
+        </div>
+      </Row>
+      <Row>
+        {editing ? (
+          <form onSubmit={save} className="space-y-2">
+            <input
+              className={fieldCls}
+              type="password"
+              placeholder={set ? "New reopen password (min 4 chars)" : "Reopen password (min 4 chars)"}
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              required
+              minLength={4}
+            />
+            {msg && !msg.ok && <p className="text-xs text-danger">{msg.text}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={busy}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg disabled:opacity-60"
+              >
+                {busy ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setPw("");
+                  setMsg(null);
+                }}
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-2 text-sm font-medium"
+            >
+              <IconLock width={16} height={16} /> {set ? "Change reopen password" : "Set reopen password"}
+            </button>
+            {set && (
+              <button onClick={clear} disabled={busy} className="text-sm font-medium text-danger disabled:opacity-60">
+                Remove
+              </button>
+            )}
+          </div>
+        )}
+        {msg?.ok && <p className="mt-1 text-xs text-success">{msg.text}</p>}
+      </Row>
+    </Section>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-6">
@@ -184,6 +318,8 @@ export default function SettingsPage() {
           </Row>
         </Section>
       )}
+
+      {user?.role === "admin" && <ReopenPassword />}
 
       <Section title="Sync">
         <Row>

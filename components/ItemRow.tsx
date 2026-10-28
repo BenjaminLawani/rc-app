@@ -29,6 +29,7 @@ type Props = {
   onCommitReceived: (id: string, value: number) => void;
   onCommitClosing: (id: string, value: number | null) => void;
   readOnly?: boolean;
+  openingReadOnly?: boolean;
 };
 
 export function ItemRow({
@@ -38,6 +39,7 @@ export function ItemRow({
   onCommitReceived,
   onCommitClosing,
   readOnly,
+  openingReadOnly,
 }: Props) {
   const [openStr, setOpenStr] = useState(fmt(entry?.opening));
   const [recvStr, setRecvStr] = useState(fmtRecv(entry?.received));
@@ -90,7 +92,7 @@ export function ItemRow({
       <input
         aria-label={`${item.name} opening`}
         inputMode="decimal"
-        disabled={readOnly}
+        disabled={readOnly || openingReadOnly}
         value={openStr}
         onFocus={(e) => {
           focused.current = "open";

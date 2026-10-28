@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/client/auth";
 import { useSync } from "@/lib/client/sync";
 import { setSessionStatus, soldOf, todayISO } from "@/lib/local/queries";
 import { exportSessionCsv } from "@/lib/local/export";
+import { ReopenButton } from "@/components/ReopenButton";
 import { IconDownload, IconLock, IconReset } from "@/components/icons";
 import { cn } from "@/lib/cn";
 
@@ -101,20 +102,21 @@ export default function SessionsPage() {
                   >
                     <IconDownload width={15} height={15} /> Export CSV
                   </button>
-                  <button
-                    onClick={() => setSessionStatus(s.id, s.status === "open" ? "closed" : "open").then(syncNow)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition active:scale-95"
-                  >
-                    {s.status === "open" ? (
-                      <>
-                        <IconLock width={15} height={15} /> Close day
-                      </>
-                    ) : (
-                      <>
-                        <IconReset width={15} height={15} /> Reopen
-                      </>
-                    )}
-                  </button>
+                  {s.status === "open" ? (
+                    <button
+                      onClick={() => setSessionStatus(s.id, "closed").then(syncNow)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition active:scale-95"
+                    >
+                      <IconLock width={15} height={15} /> Close day
+                    </button>
+                  ) : (
+                    <ReopenButton
+                      date={s.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition active:scale-95"
+                    >
+                      <IconReset width={15} height={15} /> Reopen
+                    </ReopenButton>
+                  )}
                 </div>
               </li>
             );

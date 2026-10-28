@@ -144,6 +144,15 @@ export const syncCounter = sqliteTable("sync_counter", {
   value: integer("value").notNull().default(0),
 });
 
+// ── App settings (server-only key/value) ────────────────────────────
+// Not synced to devices. Holds secrets like the reopen-password hash that
+// are verified on the server, so they never reach a staff member's device.
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Item = typeof items.$inferSelect;
@@ -151,3 +160,4 @@ export type StockSession = typeof stockSessions.$inferSelect;
 export type StockEntry = typeof stockEntries.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type MaterialUsage = typeof materialUsage.$inferSelect;
+export type AppSetting = typeof appSettings.$inferSelect;

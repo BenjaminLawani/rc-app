@@ -12,7 +12,6 @@ import {
   setEntryClosing,
   setEntryReceived,
   setSessionFinance,
-  setSessionStatus,
   soldOf,
   todayISO,
   formatSessionLabel,
@@ -22,6 +21,7 @@ import type { EntryRow, SessionRow } from "@/lib/types";
 import { SearchBar } from "@/components/SearchBar";
 import { CategorySection } from "@/components/CategorySection";
 import { CashUpPanel } from "@/components/CashUpPanel";
+import { ReopenButton } from "@/components/ReopenButton";
 import { exportSessionCsv } from "@/lib/local/export";
 import { cn } from "@/lib/cn";
 import { IconSync, IconDownload } from "@/components/icons";
@@ -61,9 +61,11 @@ export function CountView({ date }: { date: string }) {
   }, [user, isToday, items, session, date, syncNow]);
 
   const readOnly = session?.status === "closed";
+  // Staff may only touch received & closing: opening and the cash-up are admin-only.
+  const isStaff = !!user && user.role !== "admin";
 
   const commitOpening = (id: string, v: number) => {
-    if (readOnly) return;
+    if (readOnly || isStaff) return;
     setEntryOpening(id, v, user).then(syncNow);
   };
   const commitClosing = (id: string, v: number | null) => {
@@ -77,7 +79,7 @@ export function CountView({ date }: { date: string }) {
   const commitFinance = (
     patch: Partial<Pick<SessionRow, "cashCounted" | "posTotal" | "expenses" | "expensesNote">>,
   ) => {
-    if (readOnly) return;
+    if (readOnly || isStaff) return;
     setSessionFinance(date, patch, user).then(syncNow);
   };
 
@@ -184,12 +186,9 @@ export function CountView({ date }: { date: string }) {
         {readOnly && (
           <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-surface px-3 py-2 text-xs">
             <span className="text-muted">This day is closed and read-only.</span>
-            <button
-              onClick={() => setSessionStatus(date, "open").then(syncNow)}
-              className="font-semibold text-accent"
-            >
+            <ReopenButton date={date} className="font-semibold text-accent">
               Reopen to edit
-            </button>
+            </ReopenButton>
           </div>
         )}
 
@@ -221,7 +220,10 @@ export function CountView({ date }: { date: string }) {
           expected={expected}
           session={session ?? null}
           onCommit={commitFinance}
-          readOnly={readOnly}
+          readOnly={readOnly || isStaff}
+          readOnlyNote={
+            isStaff && !readOnly ? "Only an admin can edit the cash-up." : undefined
+          }
         />
       ) : totalItems === 0 ? (
         <div className="px-6 py-20 text-center">
@@ -257,6 +259,7 @@ export function CountView({ date }: { date: string }) {
               onCommitReceived={commitReceived}
               onCommitClosing={commitClosing}
               readOnly={readOnly}
+              openingReadOnly={isStaff}
             />
           ))}
         </div>

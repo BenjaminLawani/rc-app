@@ -78,9 +78,10 @@ type Props = {
   session: SessionRow | null;
   onCommit: (patch: FinancePatch) => void;
   readOnly?: boolean;
+  readOnlyNote?: string;
 };
 
-export function CashUpPanel({ expected, session, onCommit, readOnly }: Props) {
+export function CashUpPanel({ expected, session, onCommit, readOnly, readOnlyNote }: Props) {
   const cash = session?.cashCounted ?? null;
   const pos = session?.posTotal ?? null;
   const expenses = session?.expenses ?? null;
@@ -171,7 +172,7 @@ export function CashUpPanel({ expected, session, onCommit, readOnly }: Props) {
 
       {readOnly && (
         <p className="mt-3 text-center text-xs text-subtle">
-          This day is closed. Reopen it to edit the cash-up.
+          {readOnlyNote ?? "This day is closed. Reopen it to edit the cash-up."}
         </p>
       )}
     </div>

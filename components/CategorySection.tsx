@@ -12,6 +12,7 @@ type Props = {
   onCommitReceived: (id: string, value: number) => void;
   onCommitClosing: (id: string, value: number | null) => void;
   readOnly?: boolean;
+  openingReadOnly?: boolean;
 };
 
 export function CategorySection({
@@ -21,6 +22,7 @@ export function CategorySection({
   onCommitReceived,
   onCommitClosing,
   readOnly,
+  openingReadOnly,
 }: Props) {
   const counted = rows.filter((r) => r.entry?.closing != null).length;
 
@@ -54,6 +56,7 @@ export function CategorySection({
             onCommitReceived={onCommitReceived}
             onCommitClosing={onCommitClosing}
             readOnly={readOnly}
+            openingReadOnly={openingReadOnly}
           />
         ))}
       </div>
